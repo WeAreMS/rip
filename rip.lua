@@ -1,8 +1,12 @@
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local lp = game:GetService("Players").LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Window = Fluent:CreateWindow({
     Title = "RİP HUB",
-    SubTitle = "Premium Execution - Fixed Version",
+    SubTitle = "The Ultimate Execution",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Theme = "Dark"
@@ -14,50 +18,49 @@ local Tabs = {
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" })
 }
 
+-- Settings Variables
 local AimbotEnabled = false
 local HitboxEnabled = false
-local InfJumpEnabled = false
 local ESPEnabled = false
+local InfJumpEnabled = false
 local LoopSpeedEnabled = false
-local HeadSize = 20
+local HeadSize = 50
 local SpeedValue = 16
-local JumpValue = 50
 
+-- Closest Player Logic
 local function GetClosestPlayer()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-        if player ~= game:GetService("Players").LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid").Health > 0 then
-            local pos = player.Character.HumanoidRootPart.Position
-            local magnitude = (game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position - pos).Magnitude
-            if magnitude < shortestDistance then
-                closestPlayer = player
-                shortestDistance = magnitude
+    local closest, dist = nil, math.huge
+    for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+        if v ~= lp and v.Character and v.Character:FindFirstChild("Head") and v.Character.Humanoid.Health > 0 then
+            local pos = v.Character.Head.Position
+            local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+            if onScreen then
+                local d = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                if d < dist then closest = v dist = d end
             end
         end
     end
-    return closestPlayer
+    return closest
 end
 
-game:GetService("UserInputService").JumpRequest:Connect(function()
-    if InfJumpEnabled then
-        local humanoid = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then humanoid:ChangeState("Jumping") end
+-- Infinite Jump Request
+UserInputService.JumpRequest:Connect(function()
+    if InfJumpEnabled and lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
+        lp.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
     end
 end)
 
-game:GetService("RunService").RenderStepped:Connect(function()
-    local lp = game:GetService("Players").LocalPlayer
-    if not lp.Character then return end
-
-    if LoopSpeedEnabled then
-        lp.Character.Humanoid.WalkSpeed = SpeedValue
+-- Main Execution Loop
+RunService.RenderStepped:Connect(function()
+    if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+        if LoopSpeedEnabled then lp.Character.Humanoid.WalkSpeed = SpeedValue end
+        lp.Character.Humanoid.UseJumpPower = true
     end
 
-    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
-        if player ~= lp and player.Character then
-            -- HITBOX FIX
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
+    for _, v in pairs(game:GetService("Players"):GetPlayers()) do
+        if v ~= lp and v.Character then
+            -- HITBOX (Blue Neon Aggressive)
+            local root = v.Character:FindFirstChild("HumanoidRootPart")
             if root then
                 if HitboxEnabled then
                     root.Size = Vector3.new(HeadSize, HeadSize, HeadSize)
@@ -65,45 +68,53 @@ game:GetService("RunService").RenderStepped:Connect(function()
                     root.BrickColor = BrickColor.new("Really blue")
                     root.Material = Enum.Material.Neon
                     root.CanCollide = false
+                    root.Massless = true
                 else
-                    root.Size = Vector3.new(2, 2, 1)
-                    root.Transparency = 1
+                    -- Sadece hitbox kapalıyken eski boyuta dön (Performans için pcall)
+                    pcall(function() 
+                        root.Size = Vector3.new(2, 2, 1)
+                        root.Transparency = 1 
+                    end)
                 end
             end
 
-            -- ESP (WALLHACK) FIX
-            local highlight = player.Character:FindFirstChild("ESPHighlight")
+            -- WALLHACK (Always On Top Fix)
+            local highlight = v.Character:FindFirstChild("RIP_Highlight")
             if ESPEnabled then
                 if not highlight then
-                    highlight = Instance.new("Highlight", player.Character)
-                    highlight.Name = "ESPHighlight"
-                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "RIP_Highlight"
+                    highlight.Parent = v.Character
                 end
                 highlight.Enabled = true
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Duvar arkası için kritik
                 highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
             elseif highlight then
                 highlight.Enabled = false
             end
         end
     end
 
+    -- AIMBOT
     if AimbotEnabled then
         local target = GetClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, target.Character.Head.Position)
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
         end
     end
 end)
 
-Tabs.Combat:AddToggle("AimbotT", {Title = "Aimbot", Default = false}):OnChanged(function(V) AimbotEnabled = V end)
-Tabs.Combat:AddToggle("HitboxT", {Title = "Hitbox Extender", Default = false}):OnChanged(function(V) HitboxEnabled = V end)
-Tabs.Combat:AddSlider("HitboxS", {Title = "Hitbox Size", Default = 20, Min = 2, Max = 100, Rounding = 1, Callback = function(V) HeadSize = V end})
+-- UI CONTROLS
+Tabs.Combat:AddToggle("AimT", {Title = "Aimbot", Default = false}):OnChanged(function(v) AimbotEnabled = v end)
+Tabs.Combat:AddToggle("HitT", {Title = "Blue Neon Hitbox", Default = false}):OnChanged(function(v) HitboxEnabled = v end)
+Tabs.Combat:AddSlider("HitS", {Title = "Hitbox Size", Default = 50, Min = 2, Max = 100, Rounding = 1, Callback = function(v) HeadSize = v end})
 
-Tabs.Movement:AddSlider("WS", {Title = "Walk Speed", Default = 16, Min = 16, Max = 500, Rounding = 1, Callback = function(V) SpeedValue = V end})
-Tabs.Movement:AddToggle("LS", {Title = "Loop Speed", Default = false}):OnChanged(function(V) LoopSpeedEnabled = V end)
-Tabs.Movement:AddSlider("JP", {Title = "Jump Power", Default = 50, Min = 50, Max = 500, Rounding = 1, Callback = function(V) lp.Character.Humanoid.JumpPower = V end})
-Tabs.Movement:AddToggle("IJ", {Title = "Infinite Jump", Default = false}):OnChanged(function(V) InfJumpEnabled = V end)
+Tabs.Movement:AddSlider("WS", {Title = "Walk Speed", Default = 16, Min = 16, Max = 300, Rounding = 1, Callback = function(v) SpeedValue = v end})
+Tabs.Movement:AddToggle("LS", {Title = "Loop Speed", Default = false}):OnChanged(function(v) LoopSpeedEnabled = v end)
+Tabs.Movement:AddToggle("IJ", {Title = "Infinite Jump", Default = false}):OnChanged(function(v) InfJumpEnabled = v end)
 
-Tabs.Visuals:AddToggle("ESPT", {Title = "ESP (Wallhack)", Default = false}):OnChanged(function(V) ESPEnabled = V end)
+Tabs.Visuals:AddToggle("ESPT", {Title = "ESP (Wallhack)", Default = false}):OnChanged(function(v) ESPEnabled = v end)
 
 Window:SelectTab(1)
+Fluent:Notify({Title = "RİP HUB", Content = "Final Version Loaded!", Duration = 3})
